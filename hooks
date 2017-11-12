@@ -9,6 +9,7 @@ __author__ = "Sascha Peilicke <saschpe@gmx.de>"
 __version__ = "0.1.1"
 
 
+import glob
 import os
 import json
 import re
@@ -18,6 +19,7 @@ import sys
 
 CONFIG_PATH = os.getenv('CONFIG_PATH') or os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILENAME = os.getenv('CONFIG_FILENAME') or os.path.join(CONFIG_PATH, "hooks.json")
+CONFIG_FILENAME_GLOB = os.getenv('CONFIG_FILENAME_GLOB') or os.path.join(CONFIG_PATH, "hooks.*.json")
 CONFIG_SCHEMA_FILENAME = os.getenv('CONFIG_SCHEMA_FILENAME') or os.path.join(CONFIG_PATH, "hooks.schema.json")
 IPTABLES_BINARY = os.getenv('IPTABLES_BINARY') or subprocess.check_output(["which", "iptables"]).strip()
 
@@ -97,17 +99,22 @@ def config(validate=True):
     if not hasattr(config, "_conf"):
         with open(CONFIG_FILENAME, "r") as f:
             config._conf = json.loads(json_minify(f.read()))
-        if validate:
-            # Try schema validation but avoid hard 'jsonschema' requirement:
-            try:
-                import jsonschema
-                with open(CONFIG_SCHEMA_FILENAME, "r") as f:
-                    config._schema = json.load(f)
-                jsonschema.validate(config._conf,
-                                    config._schema,
-                                    format_checker=jsonschema.FormatChecker())
-            except ImportError:
-                pass
+    other_configs = glob.glob(CONFIG_FILENAME_GLOB)
+    for configuration_path in other_configs:
+        with open(configuration_path) as f:
+            other_config = json.loads(json_minify(f.read()))
+            config._conf.update(other_config)
+    if validate:
+        # Try schema validation but avoid hard 'jsonschema' requirement:
+        try:
+            import jsonschema
+            with open(CONFIG_SCHEMA_FILENAME, "r") as f:
+                config._schema = json.load(f)
+            jsonschema.validate(config._conf,
+                                config._schema,
+                                format_checker=jsonschema.FormatChecker())
+        except ImportError:
+            pass
     return config._conf
 
 
